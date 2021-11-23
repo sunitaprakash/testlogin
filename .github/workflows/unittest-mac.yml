@@ -1,0 +1,15 @@
+name: 'Login Mac'
+on:
+  push:
+    paths:
+      - action.yml
+      - .github/workflows/unittest.yml
+      - .github/workflows/unittest-linux.yml
+jobs:
+  login:
+    uses: gridai-actions/gridai-login/.github/workflows/unittest.yml@main
+    with:
+      os: macos-latest
+    secrets:  
+      gridai-username: ${{ secrets.GRIDAI_USERNAME }} 
+      gridai-key: ${{ secrets.GRIDAI_KEY }}      

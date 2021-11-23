@@ -1,0 +1,33 @@
+name: 'Grid.ai Login Workflow'
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+    secrets:
+      gridai-username:
+        required: true
+        description: "Grid.ai username used in grid login command"
+      gridai-key:
+        required: true
+        description: "Grid.ai key used in grid login command"        
+jobs:
+  unittests:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        python-version: [3.8,3.9]       
+        python-venv: ["","venv"]       
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v2     
+      - uses: gridai-actions/gridai-login@main
+        with:
+          python-version: ${{ matrix.python-version }}
+          python-venv: ${{ matrix.python-venv }}
+          gridai-username: ${{ secrets.gridai-username }} 
+          gridai-key: ${{ secrets.gridai-key }}  
+          

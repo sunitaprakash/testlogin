@@ -1,0 +1,135 @@
+name: 'Grid.ai Login'
+inputs:
+  # required
+  gridai-username:
+    required: true
+    default:
+    type: string
+    description: "Grid.ai username used in grid login command"
+  gridai-key:
+    required: true
+    default: 
+    type: string
+    description: "Grid.ai key used in grid login command"
+  # optional
+  ssh-key-type:
+    required: false
+    default: ed25519
+    type: string
+    description: "ssh key type to generate. default=ed25519.  [dsa | ecdsa | ed25519 | rsa]"  
+  grid-url:  
+    required: false
+    default: 
+    type: string
+    description: "URL to reach Grid.ai services"
+  # python env to setup  
+  python-venv:  
+    required: false
+    default: ""    
+    type: string
+    description: "'', venv, conda are options"
+  python-version:  
+    required: false
+    default: 3.8    
+    type: string
+    description: "3.8 is the minimum Python version required for Grid.ai"
+  gridai-python-modules:  
+    required: false
+    default: "lightning-grid"
+    type: string
+    description: "Space separate list of Python modules to install"
+  add-module-version:  
+    required: false
+    default: "true"
+    type: string
+    description: "Suffix the latest Python module version. eg: lightning-grid to lightning-grid=0.4.1 (for example)"
+outputs:
+  display_name:
+    value: ${{ steps.gridai-obj-status.outputs.display_name }}
+    description: "team name of the user"  
+  userid:
+    value: ${{ steps.gridai-obj-status.outputs.userid }}
+    description: "team name of the user"  
+  username:
+    value: ${{ steps.gridai-obj-status.outputs.username }}
+    description: "team name of the user"  
+  email:
+    value: ${{ steps.gridai-obj-status.outputs.email }}
+    description: "team name of the user"
+  teams:
+    value: ${{ steps.gridai-obj-status.outputs.teams }}
+    description: "optional team name of the user"    
+  role:
+    value: ${{ steps.gridai-obj-status.outputs.role }}
+    description: "optional role of the user"
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        echo "${{ github.action_path }}" >> $GITHUB_PATH
+      shell: bash
+    - uses: actions/setup-python@v2
+      with:
+        python-version: ${{ inputs.python-version }}   
+
+    - run: |
+        echo ${{ inputs.gridai-python-modules }} | tr ' ' '\n' | while read m; do
+          export PACKAGE_JSON_URL="https://pypi.org/pypi/${m}/json"
+          if [ -z "${{ inputs.add-module-version }}" ]; then
+            echo ${m} >> gridai-cli-requirements.txt
+          else
+            LATEST_VERSION=$(curl -L -s "$PACKAGE_JSON_URL" | jq  -r '.releases | keys | .[]' | sort -V | tail -1)
+            echo ${m}==$LATEST_VERSION
+            echo ${m}==${LATEST_VERSION} >> gridai-cli-requirements.txt
+          fi  
+        done
+      shell: bash
+    - run: |
+        case "${{ inputs.python-venv }}" in 
+          venv)
+            pip install virtualenv
+            virtualenv gridai_venv  
+            # linux and macos
+            if [ -f gridai_venv/bin/activate ]; then 
+              source gridai_venv/bin/activate
+            # windows  
+            else
+              source gridai_venv\\Scripts\\activate
+            fi
+            ;;
+          *)
+            ;;
+        esac
+      shell: bash
+    - run: |
+        pip install -r gridai-cli-requirements.txt
+      shell: bash
+    - run: |
+        pip install fire pandas
+      shell: bash
+    - run: |
+        if [ ! -z "${{ inputs.grid-url }}" ]; then 
+          export grid-url=${{ inputs.grid-url }}
+          echo "grid-url=${{ inputs.grid-url }}" >> $GITHUB_ENV 
+        fi
+      shell: bash
+    - run: |
+        echo "::add-mask::${{ inputs.gridai-username }}"
+        echo "::add-mask::${{ inputs.gridai-key }}" 
+      shell: bash
+    - run: |
+        ssh-keygen -t ${{ inputs.ssh-key-type }}  -C "${{ inputs.gridai-username }}" -N "" -f ~/.ssh/id_${{ inputs.ssh-key-type }}
+      shell: bash
+    - id: gridai-obj-status
+      run: | 
+        gridai.py create_login --grid_args " --username ${{ inputs.gridai-username }} --key ${{ inputs.gridai-key }}" --gha True
+      shell: bash
+
+    - run: |
+        gridai.py cli "grid ssh-keys add lit_key ~/.ssh/id_ed25519.pub"
+      shell: bash
+    # used for sync and cleanup any resources
+    - run: |
+        export GRIDAI_LOGIN_DT=$(date '+%y%m%d-%H%M%S') 
+        echo "GRIDAI_LOGIN_DT=${GRIDAI_LOGIN_DT}" >> $GITHUB_ENV 
+      shell: bash      
